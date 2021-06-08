@@ -1,0 +1,82 @@
+```{r message = FALSE, warning = FALSE, results = 'hide'}
+install.packages("remotes")
+remotes::install_github("gmonette/spida2")
+library(tidyverse)
+library(ggplot2)
+library(spida2)
+library(lattice)
+library(gridExtra)
+library(nlme)
+```
+
+```{r message = FALSE, warning = FALSE}
+master <- read_csv("code/master.csv") 
+df<-master %>% select(-6,-9)    #this report does not analyze HDI
+colnames(df) <- c("Country", "Yr", "Sex", "Age","SuicideNo", "SuicidesRate", "CountryYr", "GDPperYr", "GDPperCapita", "Gen")
+df <- as.data.frame(df)
+```
+
+```{r message = FALSE, warning = FALSE}
+groupCountry <- count(df,Country)
+groupCountry
+orderCountry <- arrange(groupCountry, n)     #arranged list of # obs for each country
+orderCountry
+df <- df %>%
+  filter(!(Country %in% head(orderCountry$Country, 11)))
+```
+
+```{r message = FALSE, warning = FALSE}
+df$Age <- gsub(" years", "", df$Age)
+df$Age <- factor(df$Age, levels = c("5-14","15-24","25-34","35-54","55-74","75+"), order = TRUE)
+df$Gen <- factor(df$Gen, levels = c("G.I. Generation","Silent","Boomers","Generation X","Millenials","Generation Z"), order = TRUE)
+df$Sex <- ifelse(df$Sex == "male", "Male", "Female") #fix consistency of sex
+fctr <- c('Country', 'Sex')
+df[fctr] <- lapply(df[fctr], function(x){factor(x)})
+df$id <- reorder( df$Country, df$SuicidesRate)
+
+df <- as_tibble(df)
+glimpse(df)
+```
+
+```{r warning = FALSE}
+fit.S <- glm(formula=SuicideNo ~ Sex, family="poisson", data=df)
+summary(fit.S)
+wald(fit.S)
+```
+
+```{r warning = FALSE}
+fit.A <- glm( SuicideNo ~ 1 + Age, family="poisson", data=df)
+summary(fit.A)
+wald(fit.A)
+```
+
+       
+```{r warning = FALSE}
+fit.AS <- glm( SuicideNo ~ Age+Sex, family="poisson", data=df)
+summary(fit.AS)
+wald(fit.AS)
+```
+
+```{r warning = FALSE}
+fit.as <- glm( SuicideNo ~ Age*Sex, family="poisson", data=df)
+summary(fit.as)
+wald(fit.as, 'Sex')
+```
+
+```{r warning = FALSE}
+fit.g <- glm( SuicideNo ~ Lag(log(GDPperCapita)), family="poisson", data=df)
+summary(fit.g)
+wald(fit.g)
+```
+
+```{r warning = FALSE}
+fit.asgdp <- glm( SuicideNo ~ Age+Sex+Age*Sex+ Lag(log(GDPperCapita)), family="poisson", data=df)
+summary(fit.asgdp)
+wald(fit.asgdp)
+```
+
+```{r warning = FALSE}
+AIC(fit.A, fit.S, fit.as, fit.g, fit.asgdp)
+BIC(fit.A, fit.S, fit.as, fit.g, fit.asgdp)
+```
+
